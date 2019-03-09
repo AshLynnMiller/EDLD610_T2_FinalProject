@@ -39,7 +39,8 @@ knitr::opts_chunk$set(echo = TRUE,
 #install.packages("RColorBrewer")
 #install.packages("knitr")
 #install.packages("jpeg")
-#install.packages('gifski')
+#install.packages("gifski")
+#install.packages("colorspance)
 
 library(pkgconfig)
 library(rio)
@@ -59,6 +60,7 @@ library(transformr)
 library(RColorBrewer)
 library(knitr)
 library(jpeg)
+library(colorspace)
 
 img1_path <- "/Users/amiller/Documents/Data Science/Winter 2019/EDLD610_T2_FinalProject/Preliminary graphs/Fig1.jpg"
 
@@ -542,7 +544,7 @@ Here I attempt to plot relation between recall accuracy and strategy type.
   + **Identification of the intended audience:** General public
   + **The intended message to be communicated:** Strategies that rely on more elaborative mental processes are associated with better memory performance
 
-```{r plot4, fig.height = 5, fig.align='center'}
+```{r plot4, fig.height = 5, fig.width = 8, fig.align='center'}
 
 # Select variables of interest
 strategy_data <- data %>%
@@ -583,46 +585,49 @@ strategy_data$strat_type <- factor(strategy_data$strat_type,
                                            "Passive Reading", 
                                            "Other"))
 
+stripe_colors <- c("#7F38A7", "#42B9BD")
+bar_colors <- c("#5F2A7C", "#31898C")
+
 plot4 <- strategy_data %>%
   #filter out other and grouping strategy
   filter(strat_type != "Other" & strat_type != "Grouping") %>%
-  ggplot(aes(response, mean_acc, fill = response)) +
-      geom_col(width = 0.60, 
-               alpha = 0.6) +
-      geom_errorbar(aes(ymin = mean_acc + qnorm(0.025)*se_acc, 
-                          ymax = mean_acc + qnorm(0.975)*se_acc),
-                          color = "gray40",
-                          width = 0.4, 
-                          size = 0.8) +
-      # Print accuracy associated with each condition
-      geom_text(aes(response, mean_acc, label = paste0(round(mean_acc*100), "%")),
-                nudge_y = 0.15, # Specifies how high above bar text appears
-                size = 3,
-                color = "gray80") +
-      # Provide seperate graphs for each strategy
-      facet_wrap(~strat_type) +
-      scale_fill_carto_d(palette = "Burg") +
-      theme_minimal() +
-      # Delete legend and left-align caption
-      theme(legend.position="none",
-            strip.text = element_text(size = 11)) +
-            #strip.background = element_rect(fill = "gray10")) +
-      #Modify labels
-      labs(title = "Recall Accuracy as a Function of Strategy Type and Use of Strategy",
-               y = "Mean Recall Accuracy",
-               x = "",
-               caption = "'No' represents individuals who did not report using given strategy, whereas 'Yes' represents those who 
-used said strategy. Note that performance is actually better when people report not using a normatively 
-ineffective strategy (e.g., rote rehearsal or passive reading) than when they report using these strategies.") +
-      # Rename labels on x-axis
-      scale_x_discrete(breaks = c(0, 1),
-                       labels = c("No", "Yes")) +
-      # Modify names/range of y-axis 
-      scale_y_continuous(breaks = c(0, 0.2, 0.4, 0.6, 0.8),
-                         labels = c("0%", "20%", "40%", "60%", "80%"),
-                         limits = c(0, 0.8))
+    ggplot(aes(mean_acc, response, group = response, fill = response)) +
+        # Add density stripes to mark region of standard error
+        stat_confidence_density(aes(moe = se_acc),
+                                height = 0.5) +
+        scale_fill_manual(values = stripe_colors) +
+        # Add vertical line where mean is for each condition
+        geom_vpline(aes(colour = response),
+                    stat = "summary",
+                    size = 0.9) +
+        scale_colour_manual(values = bar_colors) +
+        # Create seperate sections based on strategy type
+        facet_wrap(~strat_type, nrow = 1) +
+        # Print accuracy associated with each condition
+        geom_text(aes(mean_acc, response, label = paste0(round(mean_acc*100), "%")),
+                  nudge_x = 0.005,
+                  nudge_y = 0.3,
+                  size = 3,
+                  color = "gray80") +
+        theme_minimal() +
+        # Delete legend, increase size of facet labels, and center title
+        theme(legend.position = "none",
+              strip.text = element_text(size = 11),
+              plot.title = element_text(hjust = 0.5)) +
+        labs(title = "Recall Accuracy as a Function of Strategy Type and Use of Strategy",
+                     y = "",
+                     x = "Mean Recall Accuracy",
+                     caption = "'No' represents individuals who did not report using given strategy, whereas 'Yes' represents those who used 
+said strategy. Note that performance is actually better when people report not using a normatively ineffective 
+strategy (e.g., rote rehearsal or passive reading) than when they report using these strategies.") +
+        # Rename labels on x-axis
+        scale_y_discrete(breaks = c(0, 1),
+                         labels = c("No", "Yes")) +
+        # Modify names/range of y-axis 
+        scale_x_continuous(breaks = c(0.45, 0.50, 0.55, 0.6, 0.65, 0.70),
+                           labels = c("0.45%", "", "55%" , "", "65%", ""),
+                           limits = c(0.40, 0.70))
 
-# Applying my theme to plot
 plot4 + bbg_darktheme
 
 ```
