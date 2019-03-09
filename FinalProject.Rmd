@@ -618,8 +618,8 @@ plot4 <- strategy_data %>%
                      y = "",
                      x = "Mean Recall Accuracy",
                      caption = "'No' represents individuals who did not report using given strategy, whereas 'Yes' represents those who used 
-said strategy. Note that performance is actually better when people report not using a normatively ineffective 
-strategy (e.g., rote rehearsal or passive reading) than when they report using these strategies.") +
+said strategy. Note that performance is actually better among people who report not using a normatively ineffective 
+strategy (e.g., rote rehearsal or passive reading) than when people report using these strategies.") +
         # Rename labels on x-axis
         scale_y_discrete(breaks = c(0, 1),
                          labels = c("No", "Yes")) +
