@@ -1,0 +1,241 @@
+---
+title: "Untitled"
+output: 
+  flexdashboard::flex_dashboard:
+    storyboard: true
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(pkgconfig)
+library(rio)
+library(here)
+library(tidyverse)
+library(magrittr)
+library(ggforce)
+library(rcartocolor)
+library(showtext)
+library(sundry)
+library(ungeviz)
+library(gganimate)
+library(glue)
+library(mgcv)
+#library(gifski)
+library(transformr)
+library(RColorBrewer)
+library(knitr)
+library(jpeg)
+library(colorspace)
+
+img1_path <- "/Users/amiller/Documents/Data Science/Winter 2019/EDLD610_T2_FinalProject/Preliminary graphs/Fig1.jpg"
+
+img2_path <- "/Users/amiller/Documents/Data Science/Winter 2019/EDLD610_T2_FinalProject/Preliminary graphs/Fig2.jpg"
+
+img3_path <- "/Users/amiller/Documents/Data Science/Winter 2019/EDLD610_T2_FinalProject/Preliminary graphs/Fig3.jpg"
+
+# Disable scientific notation
+options(scipen = 999)
+```
+
+The Data {.sidebar}
+============
+## About
+Up until now, to visualize data in my own research, I would obtain means and standard errors in SPSS, then plot the data in Excel. This practice isn't exactly what I'd call ideal. So, the purpose of this dashboard is to demonstrate various methods of visualizing uncertainty in `R`, particularly with pupillometry data.
+
+The data-set I will be using for this demonstration is de-identified and already hosted on my [Github](https://github.com/AshLynnMiller/EDLD610_T2_FinalProject). The data come from one of my recent publications (Experiment 1; [Miller, Gross, & Unsworth, 2019](https://www.sciencedirect.com/science/article/pii/S0749596X18300846)). In this paper, pupil dilation was used as an index of the intensity of attention to determine if variation in attention at encoding partially accounts for the relation between working memory capacity (WMC) and long-term memory performance (LTM). Participants (*N* = 138) completed a battery of complex span working memory tasks, followed by a delayed free recall task while pupil dilation was simultaneously recorded.
+
+```{r load_tidy_data}
+
+data <- import(here("data", "DeIntentifiedJML2019Data_Exp1.sav"),
+               setclass = "tibble") %>% 
+  characterize() %>%
+  janitor::clean_names()
+
+#head(data)
+
+# Select variables of interest for pupil data
+pupil_data <- data %>%
+  select(-sp1_acc:-symspan, 
+         -ineffective:-recency_recall,
+         -baseline_pupil_mean:-tepr_recency)
+
+# Cam's efficient method to rename bin/word variables
+# E.g., data currently reads ebin1w1pt4_mean
+# I just want the variable to read bin1w1
+pupil_data %<>%
+  rename_at(
+    vars(starts_with("ebin")),
+    funs(
+      paste(
+        str_extract(., "w\\d{1,2}"),
+        "_",
+        str_extract(., "bin\\d{1,2}"),
+        sep = "")))
+
+# Tidy data:
+plot1_data <- pupil_data %>%
+  gather(key = word_bin, value = TEPR, w1_bin1:w10_bin15) %>%
+  separate(word_bin, c("word", "bin"), sep = "_") %>%
+  mutate(word = parse_number(word),
+         bin = parse_number(bin)) %>%
+  arrange(subject)
+
+```
+
+# Plot 1 {.storyboard}
+
+### Version 1
+
+```{r plot1v1, out.width = "75%", fig.align='center', echo=FALSE}
+include_graphics(img1_path) 
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Version 2
+
+```{r plot1v2}
+
+plot1 <- plot1_data %>%
+  group_by(bin) %>%
+  summarise(mean_TEPR = mean(TEPR, na.rm = TRUE),
+            se_TEPR = sundry::se(TEPR))
+
+# This just makes the line begin at x = 0 and y = 0
+plot1 <- rbind(plot1, "1st" = c(0, 0, 0)) 
+
+# I want to model uncertainty with bootstrapping:
+row_samps <- rerun(100,
+      sample(seq_len(nrow(plot1)), 
+             nrow(plot1), 
+             replace = TRUE))
+
+# Extracting samples
+d_samps <- map_df(row_samps, ~plot1[., ], .id = "sample")
+
+# Plotting both data sources (my data and hypothetical/bootstrapped data)
+plot1_academic <- ggplot(plot1, aes(x = bin, y = mean_TEPR)) +
+    stat_smooth(aes(group = sample),
+              data = d_samps,
+              geom = "line",
+              color = "gray60",
+              fullrange = TRUE,
+              size = 0.1) +
+    geom_smooth(color = "black", se = FALSE, size = 0.9) +
+    theme_bw(base_size = 12) +
+    # Change labels
+    labs(caption = "Figure 1. Task evoked pupillary response across the 3 second study (encoding) phase for each word",
+           y = "Change in Pupil Diameter (mm)",
+           x = "Time (ms)") +
+    # Relabel x axis values to make more sense to reader
+    scale_x_continuous(breaks = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 
+                                  9, 10, 11, 12, 13, 14, 15),
+                       labels = c("0", "", "400", "", "800", "", 
+                                  "1,200", "", "1,600", "", "2,000", 
+                                  "", "2,400", "", "2,800", ""),
+                       limits = c(0, NA)) +
+    # Add text specifying when stimuli appear onscreen
+    geom_text(y = 0.04,
+              x = 1.4,
+              color = "black",
+              label = "      To-be-remembered
+              word appears onscreen", 
+              size = 4, 
+              fontface = 2, 
+              family = "Times") +
+    # Add dotted vertical line at x = 0
+    geom_vline(aes(xintercept = 0),
+               color = "gray50", 
+               lty = "dashed")
+
+academic_theme <- theme(plot.subtitle = element_text(family = "Times"), 
+                        plot.caption  = element_text(family = "Times", 
+                                                     size = 12,
+                                                     hjust = 0), 
+                        axis.title    = element_text(family = "Times", 
+                                                     face = "bold"), 
+                        axis.text     = element_text(family = "Times"), 
+                        axis.text.x   = element_text(family = "Times"), 
+                        axis.text.y   = element_text(family = "Times"), 
+                        plot.title    = element_text(family = "Times", 
+                                                     face = "bold"), 
+                        legend.text   = element_text(family = "Times"), 
+                        legend.title  = element_text(family = "Times"), 
+                        strip.text    = element_text(family = "Times"),
+                        panel.grid.major = element_line(colour = "white"), 
+                        panel.grid.minor = element_line(colour = "white"))
+
+# Apply an academic theme to plot
+plot1_academic + academic_theme
+
+```
+
+### Version 3
+
+```{r plot1v3}
+
+# Plotting both data sources (my data and hypothetical/bootstrapped data)
+plot1_fun <- ggplot(plot1, aes(x = bin, y = mean_TEPR)) +
+    stat_smooth(aes(group = sample),
+              data = d_samps,
+              geom = "line",
+              color = "#2DDADA",
+              fullrange = TRUE,
+              size = 0.1) +
+    geom_smooth(color = "magenta", se = FALSE, size = 0.9) +
+    theme_minimal(base_size = 12) +
+    # Change labels
+    labs(caption = "Figure 1. Task evoked pupillary response across the 3 second study (encoding) phase for each word",
+           y = "Change in Pupil Diameter (mm)",
+           x = "Time (ms)") +
+    # Relabel x axis values to make more sense to reader
+    scale_x_continuous(breaks = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 
+                                  9, 10, 11, 12, 13, 14, 15),
+                       labels = c("0", "", "400", "", "800", "", 
+                                  "1,200", "", "1,600", "", "2,000", 
+                                  "", "2,400", "", "2,800", ""),
+                       limits = c(0, NA)) +
+    # Add text specifying when stimuli appear onscreen
+    geom_text(y = 0.04,
+              x = 1.6,
+              color = "gray80",
+              label = "      To-be-remembered
+              word appears onscreen", size = 4, fontface = 2) +
+    # Add dotted vertical line at x = 0
+    geom_vline(aes(xintercept = 0),
+               color = "gray80", 
+               lty = "dashed")
+
+bbg_darktheme <- theme(panel.grid.major = element_line(colour = "gray10"), 
+                       panel.grid.minor = element_line(colour = "gray10"), 
+                       axis.text = element_text(colour = "gray80"), 
+                       axis.text.x = element_text(colour = "gray80"), 
+                       axis.text.y = element_text(colour = "gray80"),
+                       axis.title = element_text(colour = "gray80", 
+                                                 face = "bold"),
+                       axis.ticks = element_line(colour = "gray80"),
+                       axis.line = element_line(colour = "gray80"),
+                       legend.text = element_text(colour = "gray80"), 
+                       legend.title = element_text(colour = "gray80"), 
+                       plot.subtitle = element_text(colour = "gray80"),
+                       strip.text = element_text(colour = "gray80", 
+                                                 face = "bold"),
+                       panel.background = element_rect(fill = "gray10"),                     
+                       plot.background = element_rect(fill = "gray10"), 
+                       legend.background = element_rect(fill = NA, 
+                                                        color = NA), 
+                       plot.margin = margin(10, 10, b = 20, 10),
+                       plot.caption = element_text(colour = "gray80", 
+                                                   vjust = 1, 
+                                                   hjust = 0,
+                                                   size = 10.5), 
+                       plot.title = element_text(colour = "gray80", 
+                                                 face = "bold"))
+
+plot1_fun + bbg_darktheme
+
+```
+
